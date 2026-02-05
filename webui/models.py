@@ -64,6 +64,9 @@ class ImageJob(db.Model):
 
 def init_db(app):
     """Initialize database with app context."""
+    # Check if db is already initialized
+    if app.extensions.get('sqlalchemy'):
+        return  # Already initialized
     db.init_app(app)
     with app.app_context():
         db.create_all()
