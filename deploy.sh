@@ -102,7 +102,7 @@ $SSH_CMD "$REMOTE_USER@$REMOTE_IP" "
     mkdir -p $PROJECT_DIR
     tar -xzf /tmp/comic_upscale.tar.gz -C $PROJECT_DIR
     rm /tmp/comic_upscale.tar.gz
-    bash /tmp/comic_upscale_setup.sh
+    bash /tmp/comic_upscale_setup_$.sh
 "
 echo "--- REMOTE OUTPUT END ---"
 
