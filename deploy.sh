@@ -103,7 +103,7 @@ if [ -f "$BASICSR_PATH" ]; then
 fi
 
 log_step "Verifying installation..."
-$PYTHON -c "from realesrgan import RealESRGAN; print('Real-ESRGAN: OK')" 2>&1 || log_info "Model will download on first run"
+$PYTHON -c "from realesrgan import RealESRGANer; print('Real-ESRGAN: OK')" 2>&1 || log_info "Model will download on first run"
 
 echo ""
 echo "============================================== Ready! =============================================="

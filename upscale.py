@@ -118,7 +118,7 @@ class UpscaleEngine:
     def load_model(self):
         """Load Real-ESRGAN model."""
         try:
-            from realesrgan import RealESRGAN
+            from realesrgan import RealESRGANer
             
             logger.info(f"Loading Real-ESRGAN model: {self.model_name}...")
             
@@ -131,8 +131,9 @@ class UpscaleEngine:
             if self.model_name in ['RealESRGAN_x2plus', 'realesrgan-x2plus']:
                 effective_scale = 2  # These are fixed 2x models
             
-            self._model = RealESRGAN(
+            self._model = RealESRGANer(
                 scale=effective_scale,
+                model_path=None,
                 model=self.model_name,
                 model_dir='/workspace/weights',
                 device='cuda'
