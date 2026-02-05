@@ -77,15 +77,30 @@ log_info "  $WEIGHTS_DIR"
 log_step "Installing Python packages..."
 # Fix torch/torchvision compatibility issue
 # torchvision.transforms.functional_tensor was removed in torchvision 0.15+
-# basicsr (realesrgan dep) needs it - install compatible versions
-log_info "Uninstalling old torch versions..."
-$PIP uninstall -y torch torchvision torchaudio 2>/dev/null || true
+# basicsr (realesrgan dep) needs it - install compatible versions or patch
+log_info "Installing torch 2.2.0 + torchvision 0.17.0 with CUDA..."
+$PIP install torch torchvision --index-url https://download.pytorch.org/whl/cu121 2>&1 | grep -E "(Successfully|ERROR)" || true
 
-log_info "Installing torch 2.0.1 + torchvision 0.15.2 with CUDA..."
-$PIP install torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu121 2>&1 | grep -E "(Successfully|ERROR)" || true
+log_info "Patching basicsr for torchvision compatibility..."
+# Patch the import in basicsr
+$PIP show basicsr | grep -q Location || true
+BASICSR_PATH=$($PIP show basicsr | grep Location | awk '{print $2}')/basicsr/data/degradations.py
+if [ -f "$BASICSR_PATH" ]; then
+    # Replace the deprecated import
+    sed -i 's/from torchvision.transforms.functional_tensor import/from torchvision.transforms.functional import/' "$BASICSR_PATH" 2>/dev/null || true
+    log_info "Patched $BASICSR_PATH"
+else
+    log_info "basicsr not found, will patch after install"
+fi
 
 log_info "Installing realesrgan and other packages..."
 $PIP install -q realesrgan flask flask-sqlalchemy flask-login gunicorn aiofiles tqdm bcrypt 2>&1 | grep -E "(Successfully|ERROR)" || true
+
+# Patch after realesrgan installation too
+BASICSR_PATH=$($PIP show basicsr 2>/dev/null | grep Location | awk '{print $2}')/basicsr/data/degradations.py 2>/dev/null
+if [ -f "$BASICSR_PATH" ]; then
+    sed -i 's/from torchvision.transforms.functional_tensor import/from torchvision.transforms.functional import/' "$BASICSR_PATH" 2>/dev/null || true
+fi
 
 log_step "Verifying installation..."
 $PYTHON -c "from realesrgan import RealESRGAN; print('Real-ESRGAN: OK')" 2>&1 || log_info "Model will download on first run"
