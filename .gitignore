@@ -41,6 +41,7 @@ logs/
 .env
 *.pem
 *.key
+config.sh
 
 # Temporary
 *.tmp
