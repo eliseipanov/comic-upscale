@@ -1,0 +1,48 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.py.bak
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data directories (don't commit large data)
+data/
+logs/
+*.db
+
+# Docker
+.docker/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Temporary
+*.tmp
+*.log
+*.bak

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Upscale - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme.css') }}">
+    <meta http-equiv="refresh" content="30">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <h1>🎨 Comic Upscale Dashboard</h1>
+            <div>
+                <span style="color: var(--text-secondary); margin-right: 15px;">
+                    Welcome, {{ current_user.username }}
+                </span>
+                <a href="{{ url_for('routes.logout') }}" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="value">{{ stats.total }}</div>
+                <div class="label">Total Images</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" style="color: var(--warning);">{{ stats.pending }}</div>
+                <div class="label">Pending</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" style="color: #3498db;">{{ stats.processing }}</div>
+                <div class="label">Processing</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" style="color: var(--success);">{{ stats.completed }}</div>
+                <div class="label">Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" style="color: var(--error);">{{ stats.failed }}</div>
+                <div class="label">Failed</div>
+            </div>
+        </section>
+
+        <!-- Progress Bar -->
+        <section class="progress-section">
+            <h2>Overall Progress: {{ stats.progress }}%</h2>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: {{ stats.progress }}%;">
+                    {{ stats.progress }}%
+                </div>
+            </div>
+        </section>
+
+        <!-- Jobs Table -->
+        <section class="jobs-section">
+            <h2>Recent Jobs</h2>
+            <table class="jobs-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Filename</th>
+                        <th>Scale</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Created</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td>#{{ job.id }}</td>
+                        <td>{{ job.filename }}</td>
+                        <td>{{ job.scale_factor }}x</td>
+                        <td>
+                            <span class="status-badge status-{{ job.status }}">
+                                {{ job.status }}
+                            </span>
+                        </td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="background: var(--bg-tertiary); width: 60px; height: 8px; border-radius: 4px; overflow: hidden;">
+                                    <div style="background: var(--accent); width: {{ job.progress_percent }}%; height: 100%;"></div>
+                                </div>
+                                <span>{{ job.progress_percent }}%</span>
+                            </div>
+                        </td>
+                        <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            {% if job.status == 'completed' %}
+                                <a href="{{ url_for('routes.download', job_id=job.id) }}" class="download-btn">Download</a>
+                            {% else %}
+                                <span style="color: var(--text-secondary);">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 30px;">
+                            No jobs yet. Start the upscale process to see jobs here.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <footer style="text-align: center; padding: 30px; color: var(--text-secondary); font-size: 14px;">
+            <p>Auto-refreshes every 30 seconds</p>
+            <p>Running on port 5800 | API available at /api/status</p>
+        </footer>
+    </div>
+</body>
+</html>

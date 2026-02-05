@@ -1,0 +1,27 @@
+# PyTorch with CUDA 12.1 support
+torch==2.2.0+cu121
+torchvision==0.17.0+cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# Real-ESRGAN for upscaling
+realesrgan==0.2.5
+
+# Flask web framework
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+
+# Gunicorn for production WSGI server
+gunicorn==21.2.0
+
+# Async file handling
+aiofiles==23.2.1
+
+# Progress bars
+tqdm==4.66.1
+
+# Security
+bcrypt==4.1.2
+
+# Additional utilities
+python-dotenv==1.0.0
