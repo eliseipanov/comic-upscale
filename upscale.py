@@ -134,6 +134,7 @@ class UpscaleEngine:
             self._model = RealESRGANer(
                 scale=effective_scale,
                 model_path=None,
+                model=self.model_name,
                 device='cuda'
             )
             
