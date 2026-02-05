@@ -16,9 +16,10 @@ REMOTE_IP="${2:-${REMOTE_IP:-localhost}}"
 SSH_PORT="${3:-${SSH_PORT:-22}}"
 SCALE="${4:-${SCALE:-2.5}}"
 WORKERS="${5:-${WORKERS:-4}}"
-MODEL="${6:-${MODEL:-RealESRGAN_x4plus_anime}}"
+MODEL="${6:-${MODEL:-RealESRGAN_x2plus}}"
 
 LOCAL_DIR="$SCRIPT_DIR"
+SETUP_SCRIPT="comic_upscale_setup.sh"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
@@ -48,8 +49,6 @@ if ! $SSH_CMD -o ConnectTimeout=10 "$REMOTE_USER@$REMOTE_IP" "echo OK" 2>/dev/nu
 fi
 
 # Create setup script
-SETUP_SCRIPT="/tmp/comic_upscale_setup_$$.sh"
-
 cat > "$SETUP_SCRIPT" << EOF
 #!/bin/bash
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -102,7 +101,7 @@ $SSH_CMD "$REMOTE_USER@$REMOTE_IP" "
     mkdir -p $PROJECT_DIR
     tar -xzf /tmp/comic_upscale.tar.gz -C $PROJECT_DIR
     rm /tmp/comic_upscale.tar.gz
-    bash /tmp/comic_upscale_setup_$.sh
+    bash /tmp/$SETUP_SCRIPT
 "
 echo "--- REMOTE OUTPUT END ---"
 
