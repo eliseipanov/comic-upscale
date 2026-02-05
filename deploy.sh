@@ -75,6 +75,8 @@ log_info "  $WEIGHTS_DIR"
 
 # Install Python packages
 log_step "Installing Python packages..."
+# Install torch with CUDA first, then torchvision (compatible), then rest
+$PIP install -q torch torchvision --index-url https://download.pytorch.org/whl/cu124 2>&1 | grep -E "(Successfully|ERROR)" || true
 $PIP install -q realesrgan flask flask-sqlalchemy flask-login gunicorn aiofiles tqdm bcrypt 2>&1 | grep -E "(Successfully|ERROR)" || true
 
 log_step "Verifying installation..."
