@@ -9,8 +9,10 @@ Automated comic image upscaling using Real-ESRGAN on free GPU instances (vast.ai
 - [Requirements](#requirements)
 - [GPU and VRAM Requirements](#gpu-and-vram-requirements)
 - [Real-ESRGAN Model Selection](#real-esrgan-model-selection)
+- [Two Deployment Options](#two-deployment-options)
+  - [Option A: Direct Install (Recommended)](#option-a-direct-install-recommended)
+  - [Option B: Docker Container](#option-b-docker-container)
 - [Quick Start](#quick-start)
-- [Deployment Guide](#deployment-guide)
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Cost Estimation](#cost-estimation)
@@ -43,11 +45,6 @@ This project upscales 2,000-10,000 comic images (512×768 → 2×-2.5×) using R
 ---
 
 ## Requirements
-
-### For Local Development
-- Python 3.10+
-- NVIDIA GPU with CUDA support (optional for CPU testing)
-- 4GB RAM minimum
 
 ### For Deployment
 - vast.ai account with GPU instance (T4 recommended)
@@ -87,14 +84,12 @@ Real-ESRGAN offers multiple models optimized for different image types. Choose b
 
 | Model Name | Best For | VRAM | Quality |
 |------------|----------|-------|---------|
+| **RealESRGAN_x4plus_anime** | Anime, comics, cartoons | ~4 GB | **Excellent for comics** |
 | **RealESRGAN_x4plus** | General photos, realistic images | ~5 GB | High |
-| **RealESRGAN_x4plus_anime** | Anime, comics, cartoons | ~4 GB | Excellent for stylized |
 | **RealESRGAN_x4plus_anime_6B** | Lightweight anime/comics | ~3 GB | Good, faster |
 | **RealESRNet_x4plus** | Basic upscaling (no restoration) | ~4 GB | Standard |
 
 ### Recommended Models for Comics
-
-For comic book images, we recommend:
 
 ```
 🎯 Best Quality → RealESRGAN_x4plus_anime
@@ -119,145 +114,120 @@ python upscale.py --model RealESRGAN_x4plus_anime_6B --input data/input --output
 
 ---
 
-## Quick Start
+## Two Deployment Options
 
-### Step 1: Clone and Setup
+### Option A: Direct Install (Recommended) ✅
 
+**Best for:** Using vast.ai's pre-installed CUDA templates
+
+**Advantages:**
+- ✅ Quick setup - no Docker build needed
+- ✅ Uses vast.ai's optimized CUDA drivers
+- ✅ One-command automated deployment
+- ✅ No need for GPU on your local machine
+
+**Steps:**
 ```bash
-# Clone repository
-git clone https://github.com/yourname/comic_upscale.git
-cd comic_upscale
+# 1. Rent GPU instance on vast.ai (choose CUDA template)
+# 2. Get the instance IP
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin activate  # Linux/Mac
-# OR: .venv\Scripts\activate  # Windows
+# 3. Deploy everything automatically
+chmod +x deploy.sh run_remote.sh
+./deploy.sh root@YOUR_INSTANCE_IP
 
-# Install dependencies
-pip install -r requirements.txt
+# 4. Upload images and start upscaling
+./upload.sh ./data/input root@YOUR_INSTANCE_IP /data/input
+./run_remote.sh root@YOUR_INSTANCE_IP 2.5 4 RealESRGAN_x4plus_anime
 ```
 
-### Step 2: Test Locally (Optional)
+**What deploy.sh does:**
+1. SSHs into the instance
+2. Uploads project files
+3. Creates virtual environment
+4. Installs all Python dependencies
+5. Sets up directories and environment
+6. Generates secure passwords
 
+---
+
+### Option B: Docker Container
+
+**Best for:** Reproducible deployments, multiple instances
+
+**Advantages:**
+- ✅ Same environment everywhere
+- ✅ Easy to update (pull new image)
+- ✅ Isolated from system Python
+
+**Steps:**
 ```bash
-# Create test directories
-mkdir -p data/input data/output data/db logs
-
-# Add test images to data/input/
-# Supports: PNG, JPG, JPEG, BMP, TIFF, WebP
-
-# Run upscaling locally
-python upscale.py \
-    --input data/input \
-    --output data/output \
-    --scale 2.5 \
-    --workers 4
-
-# View logs
-cat logs/upscale.log
-```
-
-### Step 3: Build Docker Image
-
-```bash
-# Build the image
+# 1. Build Docker image (on any machine with Docker)
 docker build -t yourname/comic_upscale:latest .
 
-# Verify image exists
-docker images | grep comic_upscale
-```
+# 2. Save and upload to vast.ai (or push to Docker Hub)
+docker save yourname/comic_upscale:latest | gzip > comic_upscale.tar.gz
+scp comic_upscale.tar.gz root@YOUR_INSTANCE_IP:/tmp/
 
-### Step 4: Push to Docker Hub (Optional)
-
-```bash
-# Login to Docker Hub
-docker login
-
-# Push image
-docker tag yourname/comic_upscale:latest yourname/comic_upscale:latest
-docker push yourname/comic_upscale:latest
+# 3. On vast.ai instance:
+docker load < /tmp/comic_upscale.tar.gz
+docker run -d --gpus all -p 5800:5800 -v /data:/data yourname/comic_upscale:latest
 ```
 
 ---
 
-## Deployment Guide
+## Quick Start
 
 ### Step 1: Rent GPU Instance on vast.ai
 
 1. Go to [vast.ai](https://vast.ai)
-2. Search for **T4** GPU instances
+2. Choose **"Templates"** → **"CUDA"** (Debian/Ubuntu with NVIDIA drivers pre-installed)
 3. Recommended specs:
    - GPU: T4 (16GB VRAM)
    - RAM: 12GB+
    - Disk: 30GB SSD
    - Price: ~$0.04/hr
-4. Click "Rent"
+4. Click "Rent" and wait for status "Running"
+5. Copy the IP address
 
-### Step 2: Connect to Instance
-
-```bash
-# Get instance IP from vast.ai dashboard
-ssh root@YOUR_INSTANCE_IP
-
-# Update system
-apt update && apt upgrade -y
-
-# Install Docker
-curl -fsSL https://get.docker.com | sh
-
-# Add user to docker group
-usermod -aG docker $USER
-
-# Verify Docker works
-docker run hello-world
-```
-
-### Step 3: Deploy Container
+### Step 2: Deploy with One Command
 
 ```bash
-# On YOUR LOCAL MACHINE, run deployment script
-chmod +x upload.sh run_upscale.sh idle_watchdog.sh
+# Make scripts executable
+chmod +x deploy.sh run_remote.sh upload.sh
 
-# Upload images
-./upload.sh ./data/input root@YOUR_INSTANCE_IP /app/data/input
+# Deploy everything (installs Python, dependencies, sets up dirs)
+./deploy.sh root@YOUR_INSTANCE_IP
 
-# Start upscaling container
-./run_upscale.sh root@YOUR_INSTANCE_IP 2.5 4
+# Upload your comic images
+./upload.sh ./data/input root@YOUR_INSTANCE_IP /data/input
+
+# Start upscaling
+./run_remote.sh root@YOUR_INSTANCE_IP 2.5 4 RealESRGAN_x4plus_anime
 ```
 
-### Step 4: Monitor Progress
+### Step 3: Monitor Progress
 
 ```bash
 # SSH into instance
 ssh root@YOUR_INSTANCE_IP
 
-# Check container status
-docker ps
-
-# View logs
-docker logs -f comic_upscale
-
 # Check GPU usage
 nvidia-smi
 
+# Check upscaling logs
+tail -f /data/logs/upscale.log
+
+# Attach to screen session (if using screen)
+screen -r upscale
+
 # Access Admin UI
-# Open browser: http://YOUR_INSTANCE_IP:5800
-# Login: admin / (check output of run_upscale.sh for password)
+# Open: http://YOUR_INSTANCE_IP:5800
+# Login: admin / (password from deploy.sh output)
 ```
 
 ---
 
 ## Configuration
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FLASK_SECRET_KEY` | Auto-generated | Secret key for Flask sessions |
-| `ADMIN_PASSWORD` | Auto-generated | Admin password (change in production!) |
-| `DATABASE_PATH` | `/app/data/db/upscale.db` | SQLite database location |
-| `OUTPUT_DIR` | `/app/data/output` | Upscaled images output directory |
-| `CUDA_VISIBLE_DEVICES` | `0` | GPU device ID |
 
 ### CLI Arguments (upscale.py)
 
@@ -271,6 +241,15 @@ python upscale.py \
     --db /path/to/db            # Database path
 ```
 
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FLASK_SECRET_KEY` | Auto-generated | Secret key for Flask sessions |
+| `ADMIN_PASSWORD` | Auto-generated | Admin password |
+| `DATABASE_PATH` | `/data/db/upscale.db` | SQLite database location |
+| `OUTPUT_DIR` | `/data/output` | Upscaled images output directory |
+
 ---
 
 ## Usage
@@ -278,7 +257,7 @@ python upscale.py \
 ### Admin Dashboard
 
 1. Open browser: `http://YOUR_INSTANCE_IP:5800`
-2. Login with credentials from `run_upscale.sh` output
+2. Login with credentials from `deploy.sh` output
 3. View:
    - Total images count
    - Pending/Processing/Completed/Failed stats
@@ -304,7 +283,7 @@ python upscale.py \
 # Click "Download" button next to completed job
 
 # Method 2: Via SCP
-scp root@YOUR_INSTANCE_IP:/app/data/output/*.png ./
+scp root@YOUR_INSTANCE_IP:/data/output/*.png ./
 ```
 
 ---
@@ -319,12 +298,6 @@ scp root@YOUR_INSTANCE_IP:/app/data/output/*.png ./
 | Full dataset | 10,000 | ~200 min | ~$0.15 |
 
 **Note:** Actual cost depends on GPU type and instance price.
-
-### Cost Control Features
-
-- **Auto-stop watchdog**: Shuts down when GPU <5% for 5 minutes
-- **Manual stop**: `docker stop comic_upscale`
-- **Cost per hour**: ~$0.04 (T4 on vast.ai)
 
 ---
 
@@ -349,9 +322,9 @@ comic_upscale/
 │   └── db/               # SQLite database
 ├── logs/                 # Application logs
 ├── upscale.py            # Async upscaling engine
+├── deploy.sh             # ⭐ One-click deploy to vast.ai
+├── run_remote.sh         # Run upscaling via SSH
 ├── upload.sh             # Upload images to server
-├── run_upscale.sh        # Start container on server
-├── idle_watchdog.sh      # Monitor and auto-stop
 ├── Dockerfile            # Docker image definition
 ├── requirements.txt      # Python dependencies
 └── README.md            # This file
@@ -368,7 +341,7 @@ comic_upscale/
 docker logs comic_upscale
 
 # Common issues:
-# - Port 5800 already in use: change port mapping in run_upscale.sh
+# - Port 5800 already in use
 # - GPU not available: nvidia-smi to verify
 # - Disk full: df -h
 ```
@@ -376,14 +349,11 @@ docker logs comic_upscale
 ### Out of Memory (OOM)
 
 ```bash
-# Reduce workers in run_upscale.sh
-./run_upscale.sh root@YOUR_INSTANCE_IP 2.5 2  # Use 2 workers instead of 4
-
-# Or use smaller scale
-./run_upscale.sh root@YOUR_INSTANCE_IP 2.0 4
+# Reduce workers
+./run_remote.sh root@YOUR_INSTANCE_IP 2.5 2 RealESRGAN_x4plus_anime
 
 # Or use lighter model
-./run_upscale.sh root@YOUR_INSTANCE_IP 2.5 4 --model RealESRGAN_x4plus_anime_6B
+./run_remote.sh root@YOUR_INSTANCE_IP 2.5 4 RealESRGAN_x4plus_anime_6B
 ```
 
 ### GPU Not Detected
@@ -394,34 +364,12 @@ nvidia-smi
 
 # If not installed:
 apt install nvidia-driver-525
-
-# Restart Docker
-systemctl restart docker
-
-# Re-run container with --gpus all
+systemctl reboot
 ```
 
 ### Login Issues
 
-```bash
-# Reset admin password
-# Edit run_upscale.sh to set ADMIN_PASSWORD=your_new_password
-# Stop and restart container
-docker stop comic_upscale
-./run_upscale.sh root@YOUR_INSTANCE_IP 2.5 4
-```
-
----
-
-## Security Notes
-
-⚠️ **Important for Production:**
-
-1. Change default credentials before deployment
-2. Use strong `FLASK_SECRET_KEY`
-3. Restrict firewall to only ports 5800, 5900
-4. Use HTTPS with a reverse proxy (nginx)
-5. Don't expose admin UI to public internet
+Check `deploy.sh` output for credentials, or reset by re-running deploy.
 
 ---
 
