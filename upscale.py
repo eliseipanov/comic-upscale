@@ -306,7 +306,7 @@ async def main():
                         help='Model name (default: RealESRGAN_x4plus_anime)')
     parser.add_argument('--dn', type=float, default=0.0,
                         help='Denoising strength 0-1 (default: 0, no denoising)')
-    parser.add_argument('--db', '-d', default='/app/data/db/upscale.db', 
+    parser.add_argument('--db', '-d', default='/workspace/data/db/upscale.db', 
                         help='Database path')
     parser.add_argument('--list-models', action='store_true',
                         help='List available models and exit')

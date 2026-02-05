@@ -9,7 +9,7 @@ from flask_login import LoginManager
 from webui.models import db, User, init_db
 
 # Database path
-DATABASE_PATH = os.environ.get('DATABASE_PATH', '/app/data/db/upscale.db')
+DATABASE_PATH = os.environ.get('DATABASE_PATH', '/workspace/data/db/upscale.db')
 SECRET_KEY = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-prod')
 
 

@@ -1,6 +1,6 @@
 """
 SQLAlchemy models for Comic Upscale application.
-Database: SQLite at /app/data/db/upscale.db
+Database: SQLite at /workspace/data/db/upscale.db
 """
 
 import os
