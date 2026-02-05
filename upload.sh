@@ -32,7 +32,7 @@ if [ ! -d "$LOCAL_DIR" ]; then
     exit 1
 fi
 
-FILE_COUNT=$(find "$LOCAL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) | wc -l)
+FILE_COUNT=$(find "$LOCAL_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) | wc -l)
 echo "Files to upload: $FILE_COUNT"
 
 if [ "$FILE_COUNT" -eq 0 ]; then
