@@ -33,12 +33,13 @@ from threading import Lock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Configure logging
-os.makedirs('/app/logs', exist_ok=True)
+LOG_DIR = '/app/comic_upscale/data/logs'
+os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/app/logs/upscale.log'),
+        logging.FileHandler(f'{LOG_DIR}/upscale.log'),
         logging.StreamHandler()
     ]
 )
@@ -133,7 +134,7 @@ class UpscaleEngine:
             self._model = RealESRGAN(
                 scale=effective_scale,
                 model=self.model_name,
-                model_dir='/app/weights',
+                model_dir='/app/comic_upscale/weights',
                 device='cuda'
             )
             

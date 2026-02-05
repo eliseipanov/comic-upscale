@@ -33,6 +33,7 @@ fi
 
 PROJECT_DIR="/app/comic_upscale"
 DATA_DIR="$PROJECT_DIR/data"
+WEIGHTS_DIR="$PROJECT_DIR/weights"
 LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=============================================="
@@ -42,6 +43,7 @@ echo ""
 echo "Target: $REMOTE_USER@$REMOTE_IP:$SSH_PORT"
 echo "Project: $PROJECT_DIR"
 echo "Data: $DATA_DIR"
+echo "Weights: $WEIGHTS_DIR"
 echo "Scale: ${SCALE}x | Workers: $WORKERS | Model: $MODEL"
 echo ""
 
@@ -74,6 +76,7 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 PROJECT_DIR="/app/comic_upscale"
 DATA_DIR="$PROJECT_DIR/data"
+WEIGHTS_DIR="$PROJECT_DIR/weights"
 INPUT_DIR="$DATA_DIR/input"
 OUTPUT_DIR="$DATA_DIR/output"
 DB_DIR="$DATA_DIR/db"
@@ -89,12 +92,13 @@ if ! command -v screen &> /dev/null; then
 fi
 
 # Create directories inside project
-log_step "Creating directories in $DATA_DIR..."
-mkdir -p "$INPUT_DIR" "$OUTPUT_DIR" "$DB_DIR" "$LOG_DIR"
+log_step "Creating directories..."
+mkdir -p "$INPUT_DIR" "$OUTPUT_DIR" "$DB_DIR" "$LOG_DIR" "$WEIGHTS_DIR"
 log_info "  $INPUT_DIR"
 log_info "  $OUTPUT_DIR"
 log_info "  $DB_DIR"
 log_info "  $LOG_DIR"
+log_info "  $WEIGHTS_DIR"
 
 # Detect Python
 if [ -d "/venv/main" ]; then
@@ -115,7 +119,7 @@ $PYTHON_CMD --version
 log_step "Installing Python packages..."
 $PIP_CMD install -q realesrgan flask flask-sqlalchemy flask-login gunicorn aiofiles tqdm bcrypt 2>&1 | grep -E "(Successfully|ERROR)" || true
 
-log_step "Verifying..."
+log_step "Verifying Real-ESRGAN..."
 $PYTHON_CMD -c "from realesrgan import RealESRGAN; print('Real-ESRGAN: OK')" 2>&1 || log_info "Model will download on first run"
 
 echo ""
@@ -123,6 +127,7 @@ echo "============================================== Ready! ====================
 echo ""
 echo "Project: $PROJECT_DIR"
 echo "Data dir: $DATA_DIR"
+echo "Weights: $WEIGHTS_DIR"
 echo "Input: $INPUT_DIR"
 echo "Output: $OUTPUT_DIR"
 echo ""
@@ -158,6 +163,7 @@ echo "============================================== ✅ Deployment Complete! ==
 echo ""
 echo "Project: $PROJECT_DIR"
 echo "Data: $DATA_DIR"
+echo "Weights: $WEIGHTS_DIR"
 echo ""
 echo "Upload images to: $INPUT_DIR"
 echo ""
@@ -166,7 +172,7 @@ echo ""
 echo "Run:"
 echo "  cd $PROJECT_DIR"
 echo "  source /venv/main/bin/activate"
-echo "  python upscale.py --input $INPUT_DIR --output $OUTPUT_DIR --scale $SCALE --workers $WORKERS"
+echo "  python upscale.py --input $INPUT_DIR --output $OUTPUT_DIR --scale $SCALE --workers $WORKERS --model $MODEL"
 echo ""
 echo "Admin UI: http://$REMOTE_IP:5800"
 echo ""
