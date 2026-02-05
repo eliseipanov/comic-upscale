@@ -265,7 +265,7 @@ class UpscaleEngine:
 def scan_images(input_dir: str, output_dir: str, scale: float) -> list:
     """Scan input directory for images and return job list."""
     jobs = []
-    supported_extensions = {'.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp'}
+    supported_extensions = {'.png', '.jpg', '.jpeg', '.jfif', '.bmp', '.tiff', '.webp'}
     
     input_path = Path(input_dir)
     if not input_path.exists():

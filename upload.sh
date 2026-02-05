@@ -45,7 +45,7 @@ SCP_CMD="scp -o StrictHostKeyChecking=no -P $SSH_PORT"
 echo ""
 echo "Uploading..."
 # Only upload image files (case-insensitive)
-for ext in jpg jpeg png webp; do
+for ext in jpg jpeg jfif png webp; do
     $SCP_CMD "$LOCAL_DIR"/*."$ext" "$REMOTE_USER@$REMOTE_IP:$INPUT_DIR/" 2>/dev/null || true
 done
 
