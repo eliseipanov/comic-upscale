@@ -82,34 +82,52 @@ This project upscales 2,000-10,000 comic images (512×768 → 2×-2.5×) using R
 
 Real-ESRGAN offers multiple models optimized for different image types. Choose based on your content:
 
-| Model Name | Best For | VRAM | Quality |
-|------------|----------|-------|---------|
-| **RealESRGAN_x4plus_anime** | Anime, comics, cartoons | ~4 GB | **Excellent for comics** |
-| **RealESRGAN_x4plus** | General photos, realistic images | ~5 GB | High |
-| **RealESRGAN_x4plus_anime_6B** | Lightweight anime/comics | ~3 GB | Good, faster |
-| **RealESRNet_x4plus** | Basic upscaling (no restoration) | ~4 GB | Standard |
+| Model | VRAM | Best For |
+|-------|------|----------|
+| **RealESRGAN_x4plus_anime** | ~4 GB | **🎯 BEST FOR COMICS** - Excellent for anime/comics |
+| **RealESRGAN_x4plus** | ~5 GB | General photos, high quality |
+| **RealESRGAN_x4plus_anime_6B** | ~3 GB | Lightweight, faster upscaling |
+| **realesr-general-x4v3** | ~2 GB | Tiny model, very low VRAM |
+| **RealESRGAN_x2plus** | ~4 GB | 2x upscaling (fixed) |
+| **RealESRNet_x4plus** | ~4 GB | Basic upscaling (no restoration) |
 
 ### Recommended Models for Comics
 
 ```
-🎯 Best Quality → RealESRGAN_x4plus_anime
-⚡ Faster Speed  → RealESRGAN_x4plus_anime_6B
-📸 Mixed Content → RealESRGAN_x4plus
+🎯 BEST QUALITY    → RealESRGAN_x4plus_anime
+⚡ FASTEST/LIGHT   → realesr-general-x4v3
+🔄 2x UPSCALING    → RealESRGAN_x2plus
 ```
 
-### Changing the Model
-
-Edit `upscale.py` or pass the `--model` argument:
+### Using Different Models
 
 ```bash
-# For anime/comics (recommended)
+# List all available models
+python upscale.py --list-models
+
+# For comics/anime (RECOMMENDED)
 python upscale.py --model RealESRGAN_x4plus_anime --input data/input --output data/output --scale 2.5
 
-# For general images
-python upscale.py --model RealESRGAN_x4plus --input data/input --output data/output --scale 2.5
+# Tiny model (low VRAM)
+python upscale.py --model realesr-general-x4v3 --input data/input --output data/output --scale 2.5
 
-# Lightweight mode (less VRAM)
-python upscale.py --model RealESRGAN_x4plus_anime_6B --input data/input --output data/output --scale 2.5
+# 2x upscaling only
+python upscale.py --model RealESRGAN_x2plus --input data/input --output data/output --scale 2
+```
+
+### Denoising Option (--dn)
+
+The `--dn` parameter controls denoising strength (0-1):
+
+```bash
+# No denoising (default)
+python upscale.py --dn 0 ...
+
+# Light denoising (prevents over-smoothing)
+python upscale.py --dn 0.3 ...
+
+# Strong denoising
+python upscale.py --dn 0.7 ...
 ```
 
 ---
@@ -229,16 +247,18 @@ screen -r upscale
 
 ## Configuration
 
-### CLI Arguments (upscale.py)
+### CLI Arguments
 
 ```bash
 python upscale.py \
-    --input /path/to/input      # Input directory (required)
-    --output /path/to/output    # Output directory (required)
-    --scale 2.5                 # Scale factor: 2, 2.5, 4
-    --workers 4                 # Number of worker threads
-    --model RealESRGAN_x4plus_anime  # Model selection
-    --db /path/to/db            # Database path
+    --input /path/to/input           # Input directory (required)
+    --output /path/to/output         # Output directory (required)
+    --scale 2.5                      # Scale factor: 0.5-4
+    --workers 4                     # Number of worker threads
+    --model RealESRGAN_x4plus_anime # Model selection
+    --dn 0.3                        # Denoising strength 0-1
+    --db /path/to/db                # Database path
+    --list-models                   # Show available models
 ```
 
 ### Environment Variables
@@ -349,11 +369,11 @@ docker logs comic_upscale
 ### Out of Memory (OOM)
 
 ```bash
-# Reduce workers
-./run_remote.sh root@YOUR_INSTANCE_IP 2.5 2 RealESRGAN_x4plus_anime
+# Use lighter model with less VRAM
+./run_remote.sh root@YOUR_INSTANCE_IP 2.5 2 realesr-general-x4v3
 
-# Or use lighter model
-./run_remote.sh root@YOUR_INSTANCE_IP 2.5 4 RealESRGAN_x4plus_anime_6B
+# Or reduce workers
+./run_remote.sh root@YOUR_INSTANCE_IP 2.5 2
 ```
 
 ### GPU Not Detected

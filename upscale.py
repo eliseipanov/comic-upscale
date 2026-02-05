@@ -5,6 +5,17 @@ Uses Real-ESRGAN to upscale images with SQLite tracking.
 
 Usage:
     python upscale.py --input /path/to/input --output /path/to/output --scale 2.5 --workers 4
+
+Available Models:
+    - RealESRGAN_x4plus          # General photos (4x)
+    - RealESRGAN_x4plus_anime    # Anime/comics (4x) - RECOMMENDED for comics
+    - RealESRGAN_x4plus_anime_6B # Lightweight anime (4x)
+    - RealESRNet_x4plus          # Basic (no restoration)
+    - RealESRGAN_x2plus          # General photos (2x)
+    - realesr-general-x4v3       # Tiny general model (4x)
+    - realesrgan-x2plus          # 2x scaling model
+
+Denoising (--dn 0-1): Higher = more denoising, less detail
 """
 
 import argparse
@@ -34,37 +45,108 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# Supported models with descriptions
+AVAILABLE_MODELS = {
+    'RealESRGAN_x4plus': {
+        'desc': 'General photos (4x) - High quality',
+        'vram': '~5 GB',
+        'best_for': 'Photos, realistic images'
+    },
+    'RealESRGAN_x4plus_anime': {
+        'desc': 'Anime/Comics (4x) - BEST FOR COMICS',
+        'vram': '~4 GB',
+        'best_for': 'Anime, comics, cartoons'
+    },
+    'RealESRGAN_x4plus_anime_6B': {
+        'desc': 'Lightweight anime (4x) - Faster',
+        'vram': '~3 GB',
+        'best_for': 'Low-resource anime upscaling'
+    },
+    'RealESRNet_x4plus': {
+        'desc': 'Basic upscaling (4x) - No restoration',
+        'vram': '~4 GB',
+        'best_for': 'Simple upscaling only'
+    },
+    'RealESRGAN_x2plus': {
+        'desc': 'General photos (2x)',
+        'vram': '~4 GB',
+        'best_for': '2x upscaling needed'
+    },
+    'realesr-general-x4v3': {
+        'desc': 'Tiny general model (4x) - Low VRAM',
+        'vram': '~2 GB',
+        'best_for': 'Low VRAM, general scenes'
+    },
+    'realesrgan-x2plus': {
+        'desc': '2x model variant',
+        'vram': '~3 GB',
+        'best_for': '2x upscaling'
+    },
+}
+
+
+def print_available_models():
+    """Print available models with descriptions."""
+    print("\n📦 Available Real-ESRGAN Models:")
+    print("-" * 60)
+    for model, info in AVAILABLE_MODELS.items():
+        print(f"  {model:30s} | {info['vram']:8s} | {info['desc']}")
+    print("-" * 60)
+    print("🎯 RECOMMENDED for comics: RealESRGAN_x4plus_anime")
+    print()
+
+
 class UpscaleEngine:
     """Async upscaling engine with Real-ESRGAN."""
     
     def __init__(self, scale: float = 2.5, workers: int = 4, 
-                 model_name: str = 'RealESRGAN_x4plus'):
+                 model_name: str = 'RealESRGAN_x4plus',
+                 denoise_strength: float = 0.0):
         self.scale = scale
         self.workers = workers
         self.model_name = model_name
+        self.denoise_strength = denoise_strength
         self.executor = ThreadPoolExecutor(max_workers=workers)
         self.queue = asyncio.Queue()
         self.processing_count = 0
         self.processing_lock = Lock()
         self._model = None
         
-        logger.info(f"Initialized UpscaleEngine: scale={scale}, workers={workers}, model={model_name}")
+        logger.info(f"Initialized UpscaleEngine: scale={scale}, workers={workers}, model={model_name}, dn={denoise_strength}")
     
     def load_model(self):
         """Load Real-ESRGAN model."""
         try:
             from realesrgan import RealESRGAN
+            
             logger.info(f"Loading Real-ESRGAN model: {self.model_name}...")
+            
+            # Check if model is known
+            if self.model_name not in AVAILABLE_MODELS:
+                logger.warning(f"Unknown model: {self.model_name}")
+            
+            # Handle scale override for 2x models
+            effective_scale = self.scale
+            if self.model_name in ['RealESRGAN_x2plus', 'realesrgan-x2plus']:
+                effective_scale = 2  # These are fixed 2x models
+            
             self._model = RealESRGAN(
-                scale=self.scale,
+                scale=effective_scale,
                 model=self.model_name,
                 model_dir='/app/weights',
                 device='cuda'
             )
+            
+            # Apply denoising if specified (for supported models)
+            if hasattr(self._model, 'set_denoise_strength'):
+                self._model.set_denoise_strength(self.denoise_strength)
+                logger.info(f"Denoising strength: {self.denoise_strength}")
+            
             logger.info("Model loaded successfully!")
             return True
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
+            logger.info("Tip: Model files are downloaded automatically on first run")
             return False
     
     async def upscale_single(self, job_id: int, input_path: str, output_path: str):
@@ -88,7 +170,6 @@ class UpscaleEngine:
         """Process image (runs in thread pool)."""
         try:
             from PIL import Image
-            import numpy as np
             
             # Load image
             image = Image.open(input_path).convert('RGB')
@@ -208,26 +289,44 @@ def scan_images(input_dir: str, output_dir: str, scale: float) -> list:
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description='Comic Upscale - Async Upscaling Engine')
+    parser = argparse.ArgumentParser(
+        description='Comic Upscale - Async Upscaling Engine',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=print_available_models() or ''
+    )
     parser.add_argument('--input', '-i', required=True, help='Input directory')
     parser.add_argument('--output', '-o', required=True, help='Output directory')
-    parser.add_argument('--scale', '-s', type=float, default=2.5, help='Scale factor (2, 2.5, 4)')
-    parser.add_argument('--workers', '-w', type=int, default=4, help='Number of worker threads')
-    parser.add_argument('--model', '-m', default='RealESRGAN_x4plus', help='Model name')
-    parser.add_argument('--db', '-d', default='/app/data/db/upscale.db', help='Database path')
+    parser.add_argument('--scale', '-s', type=float, default=2.5, 
+                        help='Scale factor (0.5-4, default: 2.5)')
+    parser.add_argument('--workers', '-w', type=int, default=4, 
+                        help='Number of worker threads (default: 4)')
+    parser.add_argument('--model', '-m', default='RealESRGAN_x4plus_anime', 
+                        help='Model name (default: RealESRGAN_x4plus_anime)')
+    parser.add_argument('--dn', type=float, default=0.0,
+                        help='Denoising strength 0-1 (default: 0, no denoising)')
+    parser.add_argument('--db', '-d', default='/app/data/db/upscale.db', 
+                        help='Database path')
+    parser.add_argument('--list-models', action='store_true',
+                        help='List available models and exit')
     
     args = parser.parse_args()
+    
+    if args.list_models:
+        print_available_models()
+        return
     
     logger.info(f"=== Comic Upscale Started ===")
     logger.info(f"Input: {args.input}")
     logger.info(f"Output: {args.output}")
     logger.info(f"Scale: {args.scale}x")
     logger.info(f"Workers: {args.workers}")
+    logger.info(f"Model: {args.model}")
+    logger.info(f"Denoising: {args.dn}")
     
     # Import Flask app for database access
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flask'))
-    from flask.app import create_app
-    from flask.models import db, ImageJob, init_db
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webui'))
+    from webui.app import create_app
+    from webui.models import db, ImageJob, init_db
     
     app = create_app()
     
@@ -266,7 +365,12 @@ async def main():
         logger.info(f"Created {len(db_jobs)} database entries")
         
         # Initialize upscaling engine
-        engine = UpscaleEngine(scale=args.scale, workers=args.workers, model_name=args.model)
+        engine = UpscaleEngine(
+            scale=args.scale, 
+            workers=args.workers, 
+            model_name=args.model,
+            denoise_strength=args.dn
+        )
         
         if not engine.load_model():
             logger.error("Failed to load model, exiting!")
@@ -291,7 +395,8 @@ async def main():
         logger.info(f"Completed: {completed}")
         logger.info(f"Failed: {failed}")
         logger.info(f"Time elapsed: {elapsed:.2f} seconds")
-        logger.info(f"Average time per image: {elapsed/len(jobs):.2f} seconds")
+        if len(jobs) > 0:
+            logger.info(f"Average time per image: {elapsed/len(jobs):.2f} seconds")
 
 
 async def idle_watchdog(engine, db_path, idle_threshold: int = 300, gpu_threshold: float = 5.0):
@@ -301,8 +406,6 @@ async def idle_watchdog(engine, db_path, idle_threshold: int = 300, gpu_threshol
         idle_threshold: seconds of low GPU usage before stopping
         gpu_threshold: GPU utilization threshold (percentage)
     """
-    import shutil
-    
     logger.info(f"Idle watchdog started (threshold: {idle_threshold}s < {gpu_threshold}% GPU)")
     
     while True:

@@ -6,7 +6,7 @@ Routes: /login, /, /download/<id>, /api/status
 import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from flask.models import db, ImageJob
+from webui.models import db, ImageJob
 from datetime import datetime
 
 bp = Blueprint('routes', __name__)
@@ -21,7 +21,7 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        from flask.models import User
+        from webui.models import User
         user = User.get_by_username(username)
         
         if user and user.check_password(password):

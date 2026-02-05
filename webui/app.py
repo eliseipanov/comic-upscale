@@ -6,7 +6,7 @@ Runs on port 5800.
 import os
 from flask import Flask
 from flask_login import LoginManager
-from flask.models import db, User, init_db
+from webui.models import db, User, init_db
 
 # Database path
 DATABASE_PATH = os.environ.get('DATABASE_PATH', '/app/data/db/upscale.db')
@@ -39,7 +39,7 @@ def create_app():
         return User.query.get(int(user_id))
     
     # Register blueprints/routes
-    from flask.routes import bp
+    from webui.routes import bp
     app.register_blueprint(bp)
     
     return app
