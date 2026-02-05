@@ -75,8 +75,16 @@ log_info "  $WEIGHTS_DIR"
 
 # Install Python packages
 log_step "Installing Python packages..."
-# Install torch with CUDA first, then torchvision (compatible), then rest
-$PIP install -q torch torchvision --index-url https://download.pytorch.org/whl/cu121 2>&1 | grep -E "(Successfully|ERROR)" || true
+# Fix torch/torchvision compatibility issue
+# torchvision.transforms.functional_tensor was removed in torchvision 0.15+
+# basicsr (realesrgan dep) needs it - install compatible versions
+log_info "Uninstalling old torch versions..."
+$PIP uninstall -y torch torchvision torchaudio 2>/dev/null || true
+
+log_info "Installing torch 2.0.1 + torchvision 0.15.2 with CUDA..."
+$PIP install torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu121 2>&1 | grep -E "(Successfully|ERROR)" || true
+
+log_info "Installing realesrgan and other packages..."
 $PIP install -q realesrgan flask flask-sqlalchemy flask-login gunicorn aiofiles tqdm bcrypt 2>&1 | grep -E "(Successfully|ERROR)" || true
 
 log_step "Verifying installation..."
