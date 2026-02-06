@@ -102,18 +102,21 @@ class UpscaleEngine:
     
     def __init__(self, scale: float = 2.5, workers: int = 4, 
                  model_name: str = 'RealESRGAN_x4plus',
-                 denoise_strength: float = 0.0):
+                 denoise_strength: float = 0.0,
+                 face_enhance: bool = False):
         self.scale = scale
         self.workers = workers
         self.model_name = model_name
         self.denoise_strength = denoise_strength
+        self.face_enhance = face_enhance
         self.executor = ThreadPoolExecutor(max_workers=workers)
         self.queue = asyncio.Queue()
         self.processing_count = 0
         self.processing_lock = Lock()
         self._model = None
+        self._face_enhancer = None
         
-        logger.info(f"Initialized UpscaleEngine: scale={scale}, workers={workers}, model={model_name}, dn={denoise_strength}")
+        logger.info(f"Initialized UpscaleEngine: scale={scale}, workers={workers}, model={model_name}, dn={denoise_strength}, face_enhance={face_enhance}")
     
     def load_model(self):
         """Load Real-ESRGAN model."""
@@ -213,6 +216,10 @@ class UpscaleEngine:
                 self._model.set_denoise_strength(self.denoise_strength)
                 logger.info(f"Denoising strength: {self.denoise_strength}")
             
+            # Load GFPGAN face enhancer if requested
+            if self.face_enhance:
+                self._load_face_enhancer()
+            
             logger.info("Model loaded successfully!")
             return True
         except Exception as e:
@@ -220,6 +227,40 @@ class UpscaleEngine:
             logger.error(f"Failed to load model: {e}")
             logger.error(traceback.format_exc())
             return False
+    
+    def _load_face_enhancer(self):
+        """Load GFPGAN face enhancer."""
+        try:
+            from gfpgan import GFPGANer
+            
+            logger.info("Loading GFPGAN face enhancer...")
+            
+            # Download GFPGAN model if needed
+            gfpgan_model_path = '/workspace/weights/GFPGANv1.4.pth'
+            if not os.path.exists(gfpgan_model_path):
+                os.makedirs('/workspace/weights', exist_ok=True)
+                from basicsr.utils.download_util import load_file_from_url
+                load_file_from_url(
+                    url='https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/GFPGANv1.4.pth',
+                    model_dir='/workspace/weights',
+                    progress=True,
+                    file_name='GFPGANv1.4.pth'
+                )
+            
+            self._face_enhancer = GFPGANer(
+                model_path=gfpgan_model_path,
+                upscale=2,  # GFPGAN's internal upscaling
+                arch='clean',
+                channel_multiplier=2,
+                device='cuda'
+            )
+            
+            logger.info("GFPGAN face enhancer loaded!")
+        except Exception as e:
+            import traceback
+            logger.warning(f"Failed to load GFPGAN: {e}")
+            logger.warning("Face enhancement disabled")
+            self.face_enhance = False
     
     async def upscale_single(self, job_id: int, input_path: str, output_path: str):
         """Upscale a single image."""
@@ -258,6 +299,18 @@ class UpscaleEngine:
             # Process with RealESRGANer using enhance() method (like original)
             # The outscale parameter controls the final output scale
             output, _ = self._model.enhance(img, outscale=self.scale)
+            
+            # Apply face enhancement if requested
+            if self.face_enhance and self._face_enhancer is not None:
+                logger.info(f"Applying GFPGAN face enhancement...")
+                # GFPGAN returns: cropped_faces, restored_faces, img_output
+                _, _, output = self._face_enhancer.enhance(
+                    output, 
+                    has_aligned=False, 
+                    only_center_face=False, 
+                    paste_back=True
+                )
+                logger.info("Face enhancement applied!")
             
             # Save output
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -343,8 +396,8 @@ class UpscaleEngine:
         logger.info("All jobs completed!")
 
 
-def scan_images(input_dir: str, output_dir: str, scale: float) -> list:
-    """Scan input directory for images and return job list."""
+def scan_images(input_dir: str, output_dir: str, scale: float, completed_filenames: set = None) -> list:
+    """Scan input directory for images and return job list (skips already completed)."""
     jobs = []
     supported_extensions = {'.png', '.jpg', '.jpeg', '.jfif', '.bmp', '.tiff', '.webp'}
     
@@ -353,9 +406,18 @@ def scan_images(input_dir: str, output_dir: str, scale: float) -> list:
         logger.error(f"Input directory does not exist: {input_dir}")
         return []
     
+    if completed_filenames is None:
+        completed_filenames = set()
+    
     for img_path in input_path.iterdir():
         if img_path.suffix.lower() in supported_extensions:
             filename = img_path.name
+            
+            # Skip if already completed
+            if filename in completed_filenames:
+                logger.info(f"Skipping already processed: {filename}")
+                continue
+            
             output_filename = f"upscale_{scale}x_{img_path.stem}.png"
             output_path = os.path.join(output_dir, output_filename)
             
@@ -366,7 +428,7 @@ def scan_images(input_dir: str, output_dir: str, scale: float) -> list:
                 'scale_factor': scale
             })
     
-    logger.info(f"Found {len(jobs)} images to process")
+    logger.info(f"Found {len(jobs)} new images to process (skipped {len(completed_filenames)} completed)")
     return jobs
 
 
@@ -387,6 +449,8 @@ async def main():
                         help='Model name (default: RealESRGAN_x4plus_anime)')
     parser.add_argument('--dn', type=float, default=0.0,
                         help='Denoising strength 0-1 (default: 0, no denoising)')
+    parser.add_argument('--face-enhance', action='store_true',
+                        help='Enable GFPGAN face enhancement')
     parser.add_argument('--db', '-d', default='/workspace/data/db/upscale.db', 
                         help='Database path')
     parser.add_argument('--list-models', action='store_true',
@@ -405,6 +469,7 @@ async def main():
     logger.info(f"Workers: {args.workers}")
     logger.info(f"Model: {args.model}")
     logger.info(f"Denoising: {args.dn}")
+    logger.info(f"Face Enhance: {args.face_enhance}")
     
     # Import Flask app for database access
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webui'))
@@ -413,20 +478,25 @@ async def main():
     
     app = create_app()
     
-    # Scan images
-    jobs = scan_images(args.input, args.output, args.scale)
+    # Initialize database and get completed filenames
+    with app.app_context():
+        init_db(app)
+        # Get already completed filenames
+        completed = ImageJob.query.with_entities(ImageJob.filename).filter(
+            ImageJob.status == 'completed'
+        ).all()
+        completed_filenames = {row[0] for row in completed}
+    
+    # Scan images (skip already completed)
+    jobs = scan_images(args.input, args.output, args.scale, None, None, completed_filenames)
     
     if not jobs:
-        logger.warning("No images found in input directory!")
+        logger.warning("No NEW images found in input directory! (Already processed files skipped)")
         return
     
     # Create database jobs
     with app.app_context():
         init_db(app)
-        
-        # Clear old pending jobs
-        ImageJob.query.filter_by(status='pending').delete()
-        ImageJob.query.filter_by(status='processing').delete()
         
         # Create new job entries
         db_jobs = []
@@ -452,7 +522,8 @@ async def main():
             scale=args.scale, 
             workers=args.workers, 
             model_name=args.model,
-            denoise_strength=args.dn
+            denoise_strength=args.dn,
+            face_enhance=args.face_enhance
         )
         
         if not engine.load_model():

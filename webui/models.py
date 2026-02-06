@@ -33,17 +33,61 @@ class User(UserMixin, db.Model):
         return User.query.filter_by(username=username).first()
 
 
+# Upscale presets
+PRESETS = {
+    'art': {
+        'model': 'RealESRGAN_x4plus',
+        'scale': 4,
+        'tile': 400,
+        'face_enhance': False,
+        'denoising': 0
+    },
+    'drawing': {
+        'model': 'RealESRGAN_x4plus_anime',
+        'scale': 4,
+        'tile': 400,
+        'face_enhance': False,
+        'denoising': 0
+    },
+    'photo': {
+        'model': 'RealESRGAN_x4plus',
+        'scale': 4,
+        'tile': 400,
+        'face_enhance': True,
+        'denoising': 0.2
+    }
+}
+
+# Available models
+AVAILABLE_MODELS = [
+    ('RealESRGAN_x4plus', 'Real-ESRGAN 4x (General)'),
+    ('RealESRGAN_x4plus_anime', 'Real-ESRGAN 4x (Anime)'),
+    ('realesr-general-x4v3', 'Real-ESRGAN General 4x (Light)'),
+    ('RealESRGAN_x2plus', 'Real-ESRGAN 2x'),
+]
+
+
 class ImageJob(db.Model):
     """Tracks each image upscaling job."""
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     original_path = db.Column(db.String(512), nullable=False)
     output_path = db.Column(db.String(512), nullable=True)
-    scale_factor = db.Column(db.Float, nullable=False, default=2.5)
+    
+    # Upscale parameters
+    scale_factor = db.Column(db.Float, nullable=False, default=4)
+    model_name = db.Column(db.String(50), nullable=False, default='RealESRGAN_x4plus')
+    tile_size = db.Column(db.Integer, nullable=False, default=400)
+    face_enhance = db.Column(db.Boolean, default=False)
+    denoising_level = db.Column(db.Float, default=0)
+    preset = db.Column(db.String(20), default='art')  # art, drawing, photo
+    
+    # Status tracking
     status = db.Column(db.String(20), nullable=False, default='pending')
-    # Status values: pending, processing, completed, failed
-    error_message = db.Column(db.Text, nullable=True)
     progress_percent = db.Column(db.Integer, default=0)
+    error_message = db.Column(db.Text, nullable=True)
+    
+    # Timestamps
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -56,6 +100,9 @@ class ImageJob(db.Model):
             'status': self.status,
             'progress': self.progress_percent,
             'scale_factor': self.scale_factor,
+            'model': self.model_name,
+            'face_enhance': self.face_enhance,
+            'preset': self.preset,
             'error': self.error_message,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None
@@ -64,7 +111,6 @@ class ImageJob(db.Model):
 
 def init_db(app):
     """Initialize database with app context."""
-    # Check if db is already initialized
     if app.extensions.get('sqlalchemy'):
         return  # Already initialized
     db.init_app(app)

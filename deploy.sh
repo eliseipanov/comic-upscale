@@ -1,6 +1,8 @@
 #!/bin/bash
-# deploy.sh - Auto deploy to vast.ai
-# Usage: ./deploy.sh [user@ip:port] [scale] [workers] [model]
+# deploy.sh - Auto deploy to vast.ai with Ollama
+# Usage: ./deploy.sh [--with-ollama]
+# Options:
+#   --with-ollama    Install Ollama + DeepSeek Coder
 
 set -e
 
@@ -10,13 +12,24 @@ if [ -f "$SCRIPT_DIR/config.sh" ]; then
     source "$SCRIPT_DIR/config.sh"
 fi
 
-# Parse args (override config if provided)
+# Parse arguments
+INSTALL_OLLAMA=false
+for arg in "$@"; do
+    case $arg in
+        --with-ollama)
+            INSTALL_OLLAMA=true
+            shift
+            ;;
+    esac
+done
+
+# Parse other args
 REMOTE_USER="${1:-${REMOTE_USER:-root}}"
 REMOTE_IP="${2:-${REMOTE_IP:-localhost}}"
 SSH_PORT="${3:-${SSH_PORT:-22}}"
 SCALE="${4:-${SCALE:-2.5}}"
 WORKERS="${5:-${WORKERS:-4}}"
-MODEL="${6:-${MODEL:-RealESRGAN_x2plus}}"
+MODEL="${6:-${MODEL:-RealESRGAN_x4plus}}"
 
 LOCAL_DIR="$SCRIPT_DIR"
 SETUP_SCRIPT="comic_upscale_setup.sh"
@@ -32,6 +45,7 @@ echo ""
 echo "Target: $REMOTE_USER@$REMOTE_IP:$SSH_PORT"
 echo "Project: $PROJECT_DIR"
 echo "Scale: ${SCALE}x | Workers: $WORKERS | Model: $MODEL"
+echo "Ollama: $INSTALL_OLLAMA"
 echo ""
 
 if [ "$REMOTE_IP" = "CHANGE_ME" ] || [ "$SSH_PORT" = "CHANGE_ME" ]; then
@@ -75,22 +89,13 @@ log_info "  $WEIGHTS_DIR"
 
 # Install Python packages
 log_step "Installing Python packages..."
-# Fix torch/torchvision compatibility issue
-# torchvision.transforms.functional_tensor was removed in torchvision 0.15+
-# basicsr (realesrgan dep) needs it - install compatible versions or patch
 log_info "Installing torch 2.2.0 + torchvision 0.17.0 with CUDA..."
 $PIP install torch torchvision --index-url https://download.pytorch.org/whl/cu121 2>&1 | grep -E "(Successfully|ERROR)" || true
 
 log_info "Patching basicsr for torchvision compatibility..."
-# Patch the import in basicsr
-$PIP show basicsr | grep -q Location || true
-BASICSR_PATH=$($PIP show basicsr | grep Location | awk '{print $2}')/basicsr/data/degradations.py
+BASICSR_PATH=$($PIP show basicsr 2>/dev/null | grep Location | awk '{print $2}')/basicsr/data/degradations.py 2>/dev/null
 if [ -f "$BASICSR_PATH" ]; then
-    # Replace the deprecated import
     sed -i 's/from torchvision.transforms.functional_tensor import/from torchvision.transforms.functional import/' "$BASICSR_PATH" 2>/dev/null || true
-    log_info "Patched $BASICSR_PATH"
-else
-    log_info "basicsr not found, will patch after install"
 fi
 
 log_info "Installing realesrgan and other packages..."
@@ -104,6 +109,40 @@ fi
 
 log_step "Verifying installation..."
 $PYTHON -c "from realesrgan import RealESRGANer; print('Real-ESRGAN: OK')" 2>&1 || log_info "Model will download on first run"
+
+# Install Ollama if requested
+if [ "$INSTALL_OLLAMA" = true ]; then
+    echo ""
+    log_step "========================================== Installing Ollama ==========================================="
+    
+    # Install Ollama
+    if ! command -v ollama &> /dev/null; then
+        log_info "Installing Ollama..."
+        curl -fsSL https://ollama.ai/install.sh | sh > /dev/null 2>&1
+        log_info "Ollama installed"
+    else
+        log_info "Ollama already installed"
+    fi
+    
+    # Start Ollama service
+    log_info "Starting Ollama service..."
+    if command -v systemctl &> /dev/null; then
+        systemctl start ollama 2>/dev/null || ollama serve &
+    else
+        ollama serve > /dev/null 2>&1 &
+    fi
+    sleep 2
+    
+    # Pull DeepSeek Coder model
+    log_info "Pulling DeepSeek Coder model (this may take a few minutes)..."
+    ollama pull deepseek-coder 2>&1 | grep -E "(pulling|success|error)" || true
+    log_info "DeepSeek Coder ready!"
+    
+    echo ""
+    log_info "Ollama endpoints:"
+    log_info "  - Local API: localhost:11434"
+    log_info "  - Usage: curl http://localhost:11434/api/generate -d '{...}'"
+fi
 
 echo ""
 echo "============================================== Ready! =============================================="
@@ -137,6 +176,10 @@ echo "============================================== ✅ Deployment Complete! ==
 echo ""
 echo "Next: ./run_remote.sh"
 echo ""
+if [ "$INSTALL_OLLAMA" = true ]; then
+    echo "Ollama installed! Access via SSH tunnel:"
+    echo "  ssh -L 11434:localhost:11434 -p $SSH_PORT $REMOTE_USER@$REMOTE_IP"
+fi
+echo ""
 echo "SSH: ssh -p $SSH_PORT $REMOTE_USER@$REMOTE_IP"
 echo "Admin UI: http://$REMOTE_IP:5800"
-echo ""

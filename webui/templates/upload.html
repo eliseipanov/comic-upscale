@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Upscale - Upload</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme.css') }}">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <h1>📤 Upload Images</h1>
+            <div>
+                <a href="{{ url_for('routes.dashboard') }}" class="btn-secondary" style="margin-right: 15px;">← Dashboard</a>
+                <span style="color: var(--text-secondary); margin-right: 15px;">
+                    {{ current_user.username }}
+                </span>
+                <a href="{{ url_for('routes.logout') }}" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="upload-container">
+            <form method="POST" enctype="multipart/form-data" class="upload-form">
+                
+                <!-- Preset Selection -->
+                <section class="form-section">
+                    <h2>🎨 Preset Mode</h2>
+                    <div class="preset-grid">
+                        {% for preset_name, config in presets.items() %}
+                        <label class="preset-card {% if selected_preset == preset_name %}selected{% endif %}">
+                            <input type="radio" name="preset" value="{{ preset_name }}" 
+                                   {% if selected_preset == preset_name or (not selected_preset and loop.first) %}checked{% endif %}>
+                            <div class="preset-name">{{ preset_name|title }}</div>
+                            <div class="preset-info">
+                                <small>{{ config.model }}</small>
+                                <small>{{ config.scale }}x</small>
+                            </div>
+                            {% if config.face_enhance %}
+                                <div class="preset-badge">Face+</div>
+                            {% endif %}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <!-- Custom Parameters Toggle -->
+                <section class="form-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="custom" id="custom-toggle">
+                        <span>⚙️ Custom Parameters</span>
+                    </label>
+                </section>
+
+                <!-- Custom Parameters (hidden by default) -->
+                <section class="form-section custom-params" style="display: none;">
+                    <h2>⚙️ Custom Settings</h2>
+                    
+                    <div class="params-grid">
+                        <div class="param-group">
+                            <label>Scale Factor</label>
+                            <div class="range-input">
+                                <input type="range" name="scale" min="2" max="4" step="0.5" value="4" id="scale-slider">
+                                <span id="scale-value">4x</span>
+                            </div>
+                        </div>
+
+                        <div class="param-group">
+                            <label>Model</label>
+                            <select name="model">
+                                {% for model_id, model_name in models %}
+                                <option value="{{ model_id }}">{{ model_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="param-group">
+                            <label>Tile Size</label>
+                            <select name="tile">
+                                <option value="200">Small (200) - Slower, less VRAM</option>
+                                <option value="400" selected>Medium (400) - Balanced</option>
+                                <option value="0">Auto (0) - Full image</option>
+                            </select>
+                        </div>
+
+                        <div class="param-group">
+                            <label>Denoising (0-1)</label>
+                            <div class="range-input">
+                                <input type="range" name="denoising" min="0" max="1" step="0.1" value="0" id="denoise-slider">
+                                <span id="denoise-value">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="face_enhance">
+                            <span>� faces: Enhance Faces (GFPGAN)</span>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- File Upload -->
+                <section class="form-section">
+                    <h2>📁 Select Images</h2>
+                    <div class="file-drop-zone" id="drop-zone">
+                        <input type="file" name="images" multiple accept="image/*" id="file-input">
+                        <div class="drop-content">
+                            <div style="font-size: 48px; margin-bottom: 10px;">🖼️</div>
+                            <p>Drag & drop images here</p>
+                            <p>or click to browse</p>
+                            <p class="file-count" id="file-count"></p>
+                        </div>
+                    </div>
+                    <div class="file-list" id="file-list"></div>
+                </section>
+
+                <!-- Submit -->
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary btn-large">
+                        🚀 Start Upscaling
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <footer style="text-align: center; padding: 30px; color: var(--text-secondary); font-size: 14px;">
+            <p>Presets: Art (general), Drawing (anime), Photo (with face enhancement)</p>
+        </footer>
+    </div>
+
+    <script>
+        // Custom parameters toggle
+        const customToggle = document.getElementById('custom-toggle');
+        const customParams = document.querySelector('.custom-params');
+        
+        customToggle.addEventListener('change', function() {
+            customParams.style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Scale slider
+        const scaleSlider = document.getElementById('scale-slider');
+        const scaleValue = document.getElementById('scale-value');
+        scaleSlider.addEventListener('input', function() {
+            scaleValue.textContent = this.value + 'x';
+        });
+
+        // Denoise slider
+        const denoiseSlider = document.getElementById('denoise-slider');
+        const denoiseValue = document.getElementById('denoise-value');
+        denoiseSlider.addEventListener('input', function() {
+            denoiseValue.textContent = this.value;
+        });
+
+        // File input handling
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const fileList = document.getElementById('file-list');
+        const fileCount = document.getElementById('file-count');
+
+        fileInput.addEventListener('change', updateFileList);
+
+        function updateFileList() {
+            const files = fileInput.files;
+            if (files.length > 0) {
+                fileCount.textContent = `${files.length} file(s) selected`;
+                fileList.innerHTML = '<div class="file-items">' +
+                    Array.from(files).map(f => 
+                        `<div class="file-item">📄 ${f.name}</div>`
+                    ).join('') + '</div>';
+            } else {
+                fileCount.textContent = '';
+                fileList.innerHTML = '';
+            }
+        }
+
+        // Drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            fileInput.files = files;
+            updateFileList();
+        });
+    </script>
+</body>
+</html>
