@@ -119,26 +119,96 @@ class UpscaleEngine:
         """Load Real-ESRGAN model."""
         try:
             from realesrgan import RealESRGANer
+            from basicsr.archs.rrdbnet_arch import RRDBNet
             
             logger.info(f"Loading Real-ESRGAN model: {self.model_name}...")
             
-            # Check if model is known
-            if self.model_name not in AVAILABLE_MODELS:
-                logger.warning(f"Unknown model: {self.model_name}")
+            # Model name to architecture parameters mapping
+            model_params = {
+                'RealESRGAN_x4plus': {'num_block': 23, 'scale': 4},
+                'RealESRGAN_x4plus_anime': {'num_block': 6, 'scale': 4},
+                'RealESRGAN_x4plus_anime_6B': {'num_block': 6, 'scale': 4},
+                'RealESRNet_x4plus': {'num_block': 23, 'scale': 4},
+                'RealESRGAN_x2plus': {'num_block': 23, 'scale': 2},
+                'realesr-general-x4v3': {'num_block': 6, 'scale': 4},
+                'realesrgan-x2plus': {'num_block': 8, 'scale': 2},
+            }
+            
+            # Get parameters for this model
+            params = model_params.get(self.model_name, {'num_block': 23, 'scale': 4})
             
             # Handle scale override for 2x models
             effective_scale = self.scale
             if self.model_name in ['RealESRGAN_x2plus', 'realesrgan-x2plus']:
-                effective_scale = 2  # These are fixed 2x models
+                effective_scale = 2
+            elif self.model_name in ['RealESRGAN_x4plus', 'RealESRGAN_x4plus_anime', 
+                                      'RealESRGAN_x4plus_anime_6B', 'RealESRNet_x4plus', 
+                                      'realesr-general-x4v3']:
+                effective_scale = params['scale']
             
+            # Create the model architecture (RRDBNet for Real-ESRGAN)
+            model = RRDBNet(
+                num_in_ch=3,
+                num_out_ch=3,
+                scale=effective_scale,
+                num_feat=64,
+                num_block=params['num_block'],
+                num_grow_ch=32
+            )
+            
+            # Model file path
+            model_filename = f"{self.model_name}.pth"
+            model_path = f"/workspace/weights/{model_filename}"
+            
+            # If model doesn't exist locally, download it
+            import os
+            if not os.path.exists(model_path):
+                logger.info(f"Downloading model: {self.model_name}...")
+                from basicsr.utils.download_util import load_file_from_url
+                # URL for RealESRGAN models
+                if self.model_name == 'RealESRGAN_x4plus':
+                    url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
+                elif self.model_name == 'RealESRGAN_x4plus_anime':
+                    url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus_anime.pth'
+                elif self.model_name == 'RealESRGAN_x4plus_anime_6B':
+                    url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus_anime_6B.pth'
+                elif self.model_name == 'RealESRGAN_x2plus':
+                    url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x2plus.pth'
+                elif self.model_name == 'realesrgan-x2plus':
+                    url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/realesrgan-x2plus.pth'
+                elif self.model_name == 'realesr-general-x4v3':
+                    url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/realesr-general-x4v3.pth'
+                elif self.model_name == 'RealESRNet_x4plus':
+                    url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRNet_x4plus.pth'
+                else:
+                    # For other models, let RealESRGANer handle download
+                    url = None
+                
+                if url:
+                    model_path = load_file_from_url(
+                        url=url,
+                        model_dir='/workspace/weights',
+                        progress=True,
+                        file_name=model_filename
+                    )
+            
+            logger.info(f"Using model path: {model_path}")
+            
+            # Load the model with RealESRGANer (pass the created model)
+            # Use moderate tile size for balance of speed and memory
             self._model = RealESRGANer(
                 scale=effective_scale,
-                model_path=None,
-                model=self.model_name,
+                model_path=model_path,
+                dni_weight=None,
+                model=model,
+                tile=400,  # Moderate tile size for speed
+                tile_pad=10,
+                pre_pad=10,
+                half=True,  # Use FP16 for memory savings
                 device='cuda'
             )
             
-            # Apply denoising if specified (for supported models)
+            # Apply denoising if specified
             if hasattr(self._model, 'set_denoise_strength'):
                 self._model.set_denoise_strength(self.denoise_strength)
                 logger.info(f"Denoising strength: {self.denoise_strength}")
@@ -146,8 +216,9 @@ class UpscaleEngine:
             logger.info("Model loaded successfully!")
             return True
         except Exception as e:
+            import traceback
             logger.error(f"Failed to load model: {e}")
-            logger.info("Tip: Model files are downloaded automatically on first run")
+            logger.error(traceback.format_exc())
             return False
     
     async def upscale_single(self, job_id: int, input_path: str, output_path: str):
@@ -170,21 +241,30 @@ class UpscaleEngine:
     def _process_image(self, input_path: str, output_path: str) -> dict:
         """Process image (runs in thread pool)."""
         try:
-            from PIL import Image
+            import cv2
+            import torch
             
-            # Load image
-            image = Image.open(input_path).convert('RGB')
-            logger.info(f"Processing: {os.path.basename(input_path)} ({image.size})")
+            # Clear GPU cache before processing
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             
-            # Upscale
-            output = self._model.predict(image)
+            # Load image using OpenCV (like original script)
+            img = cv2.imread(input_path)
+            if img is None:
+                raise ValueError(f"Failed to load image: {input_path}")
+            
+            logger.info(f"Processing: {os.path.basename(input_path)} ({img.shape[:2]})")
+            
+            # Process with RealESRGANer using enhance() method (like original)
+            # The outscale parameter controls the final output scale
+            output, _ = self._model.enhance(img, outscale=self.scale)
             
             # Save output
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            output.save(output_path, 'PNG', quality=95)
+            cv2.imwrite(output_path, output)
             
             output_size = os.path.getsize(output_path) / (1024 * 1024)
-            logger.info(f"Completed: {os.path.basename(input_path)} → {output.size}, {output_size:.2f} MB")
+            logger.info(f"Completed: {os.path.basename(input_path)} → {output.shape[:2]}, {output_size:.2f} MB")
             
             return {
                 'success': True,
@@ -192,7 +272,9 @@ class UpscaleEngine:
                 'output_size': output_size
             }
         except Exception as e:
+            import traceback
             logger.error(f"Processing error: {e}")
+            logger.error(traceback.format_exc())
             return {'success': False, 'error': str(e)}
     
     async def worker(self, db_session, ImageJob):
